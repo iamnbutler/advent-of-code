@@ -8,7 +8,7 @@ const VALID_STRIPE_COLORS: [char; 5] = ['w', 'u', 'b', 'r', 'g'];
 type Stripe = char;
 
 /// A towel is a pattern of [Stripe]s
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 struct Towel(&'static str);
 
 /// An unparsed design is string of unresolved [Stripe]s.
@@ -22,6 +22,7 @@ struct UnparsedDesign(&'static str);
 ///
 /// We don't know at this point if the design is possble yet, as it only contains
 /// the series of possible [Towel]s without considering order or uniquemess.
+#[derive(Debug, Clone)]
 struct DesignCanidate(&'static str, Vec<Towel>);
 
 /// A design is a ordered series of [Towel]s
@@ -69,8 +70,7 @@ fn unparsed_designs() -> Vec<UnparsedDesign> {
         .collect::<Vec<_>>()
 }
 
-fn design_canidate(design: UnparsedDesign) -> Option<DesignCanidate> {
-    let all_towels = all_towels();
+fn design_canidate(all_towels: Vec<Towel>, design: UnparsedDesign) -> DesignCanidate {
     let mut matched_towels: Vec<Towel> = vec![];
 
     for towel in all_towels {
@@ -81,23 +81,56 @@ fn design_canidate(design: UnparsedDesign) -> Option<DesignCanidate> {
         }
     }
 
-    if matched_towels.is_empty() {
+    DesignCanidate(design.0, matched_towels)
+}
+
+fn resolve_design(canidate: DesignCanidate) -> Option<Design> {
+    let design = canidate.0;
+    let possible_towels = canidate.1;
+    let mut towels = vec![];
+
+    let mut remaining_stripes = design;
+
+    while !remaining_stripes.is_empty() {
+        let possible_towels = possible_towels.clone();
+        let last_towel = possible_towels.last().unwrap().0;
+
+        for pt in possible_towels {
+            if remaining_stripes.starts_with(pt.0) {
+                towels.push(pt.clone());
+                remaining_stripes = remaining_stripes
+                    .strip_prefix(pt.0)
+                    .unwrap_or(remaining_stripes);
+            } else {
+                if pt.0 == last_towel {
+                    break;
+                }
+            }
+        }
+    }
+
+    if towels.is_empty() {
         None
     } else {
-        Some(DesignCanidate(design.0, matched_towels))
+        Some(Design(towels))
     }
 }
 
 // 3. Create a list of all _potential_ towel matches in a given design
 
 fn main() {
+    let all_towels = all_towels();
+    let mut possible_designs = vec![];
     let all_design_candidates: Vec<_> = unparsed_designs()
         .into_iter()
-        .filter_map(|d| design_canidate(d))
+        .map(|d| design_canidate(all_towels.clone(), d))
         .collect();
     for candidate in all_design_candidates {
-        println!("{}", candidate);
+        if let Some(design) = resolve_design(candidate) {
+            possible_designs.push(design);
+        }
     }
+    println!("{} designs are possible!", possible_designs.len())
 }
 
 impl Display for DesignCanidate {
